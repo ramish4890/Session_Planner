@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Planner</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📅 Session Planner</h1>
+            <p>Upload your roster and configure scheduling constraints</p>
+        </header>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form action="{{ url_for('schedule') }}" method="post" enctype="multipart/form-data">
+            <section class="card">
+                <h2>1. Upload Files</h2>
+                <div class="form-group">
+                    <label for="agents_file">Agents Data (Excel) *</label>
+                    <input type="file" id="agents_file" name="agents_file" accept=".xlsx,.xls" required>
+                </div>
+                <div class="form-group">
+                    <label for="leaves_file">Leave Tracker (Excel, optional)</label>
+                    <input type="file" id="leaves_file" name="leaves_file" accept=".xlsx,.xls">
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>2. Scheduling Window(s)</h2>
+                <p class="hint">Add time windows. Optionally bind roles to specific windows.</p>
+
+                <div id="windows-container">
+                    <div class="window-row">
+                        <input type="time" name="window_1_start" value="09:00" required>
+                        <span>to</span>
+                        <input type="time" name="window_1_end" value="14:00" required>
+                        <input type="text" name="window_1_roles" placeholder="Roles (comma-separated, or leave blank for all)">
+                    </div>
+                </div>
+
+                <input type="hidden" id="window_count" name="window_count" value="1">
+                <button type="button" class="btn-ghost" onclick="addWindow()">+ Add another window</button>
+            </section>
+
+            <section class="card">
+                <h2>3. Week & Days</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="week_start">Week Start Date</label>
+                        <input type="date" id="week_start" name="week_start" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="num_weekdays">Weekdays to Schedule</label>
+                        <input type="number" id="num_weekdays" name="num_weekdays" value="5" min="1" max="7" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="repeat_weeks" name="repeat_weeks" onclick="toggleMultiWeek()">
+                        Repeat this schedule for multiple weeks
+                    </label>
+                </div>
+
+                <div id="multi-week-section" class="hidden">
+                    <div class="form-group">
+                        <label for="week_end">End Date (last week's Monday)</label>
+                        <input type="date" id="week_end" name="week_end">
+                    </div>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>4. Session Settings</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="sessions_per_rep">Sessions per Rep</label>
+                        <input type="number" id="sessions_per_rep" name="sessions_per_rep" value="2" min="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="session_minutes">Session Length (minutes)</label>
+                        <input type="number" id="session_minutes" name="session_minutes" value="30" min="15" step="15" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="gap_days">Min Gap Between Sessions (days)</label>
+                        <input type="number" id="gap_days" name="gap_days" value="1" min="0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="max_per_slot">Max Reps per Slot</label>
+                        <input type="number" id="max_per_slot" name="max_per_slot" value="5" min="1" required>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>5. Constraints</h2>
+                <label><input type="checkbox" name="one_manager_per_slot" checked> One manager per slot</label><br>
+                <label><input type="checkbox" name="respect_off_day" checked> Respect Off Days</label><br>
+                <label><input type="checkbox" name="respect_leaves" checked> Respect Leaves</label><br>
+                <label><input type="checkbox" name="shift_aware" checked> Shift-aware placement</label><br>
+                <label><input type="checkbox" name="balance_days" checked> Balance daily load</label>
+            </section>
+
+            <button type="submit" class="btn-primary">Generate Schedule</button>
+        </form>
+    </div>
+
+    <script>
+        // Set default week_start to next Monday
+        const today = new Date();
+        const dayOfWeek = today.getDay();
+        const daysUntilMonday = (dayOfWeek === 0 ? 1 : 8 - dayOfWeek);
+        const nextMonday = new Date(today);
+        nextMonday.setDate(today.getDate() + daysUntilMonday);
+        document.getElementById('week_start').valueAsDate = nextMonday;
+
+        let windowCounter = 1;
+
+        function addWindow() {
+            windowCounter++;
+            const container = document.getElementById('windows-container');
+            const newRow = document.createElement('div');
+            newRow.className = 'window-row';
+            newRow.innerHTML = `
+                <input type="time" name="window_${windowCounter}_start" value="09:00" required>
+                <span>to</span>
+                <input type="time" name="window_${windowCounter}_end" value="14:00" required>
+                <input type="text" name="window_${windowCounter}_roles" placeholder="Roles (comma-separated, or leave blank for all)">
+            `;
+            container.appendChild(newRow);
+            document.getElementById('window_count').value = windowCounter;
+        }
+
+        function toggleMultiWeek() {
+            const checked = document.getElementById('repeat_weeks').checked;
+            document.getElementById('multi-week-section').classList.toggle('hidden', !checked);
+        }
+    </script>
+</body>
+</html>

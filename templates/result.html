@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schedule Generated</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>✅ Schedule Generated</h1>
+            <p>Your session schedule is ready</p>
+        </header>
+
+        <section class="card">
+            <h2>Summary</h2>
+            <div class="stats">
+                <div class="stat">
+                    <span class="stat-label">Total Sessions</span>
+                    <span class="stat-value">{{ total_sessions }}</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Reps Scheduled</span>
+                    <span class="stat-value">{{ total_reps }}</span>
+                </div>
+                {% if unscheduled_count > 0 %}
+                <div class="stat warning">
+                    <span class="stat-label">Unscheduled Reps</span>
+                    <span class="stat-value">{{ unscheduled_count }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+
+        {% if unscheduled_count > 0 %}
+        <section class="card">
+            <h2>⚠️ Unscheduled Reps</h2>
+            <p>{{ unscheduled_count }} rep(s) didn't get every session · {{ missing_sessions }} session(s) missing in total</p>
+
+            <details>
+                <summary>Click to view details</summary>
+                <div class="table-scroll">
+                    <table class="unscheduled-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Manager</th>
+                                <th>Role</th>
+                                {% if num_weeks > 1 %}<th>Week</th>{% endif %}
+                                <th>Needed</th>
+                                <th>Placed</th>
+                                <th>Missing</th>
+                                <th>Reason</th>
+                                <th>Detail</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in unscheduled_details %}
+                            <tr>
+                                <td>{{ item.workday_id }}</td>
+                                <td>{{ item.name }}</td>
+                                <td>{{ item.manager }}</td>
+                                <td>{{ item.role }}</td>
+                                {% if num_weeks > 1 %}<td>{{ item.week }}</td>{% endif %}
+                                <td>{{ item.needed }}</td>
+                                <td>{{ item.placed }}</td>
+                                <td>{{ item.missing }}</td>
+                                <td>{{ item.reason }}</td>
+                                <td>{{ item.detail }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
+        {% endif %}
+
+        <section class="card">
+            <h2>📊 Visualization</h2>
+            <div class="chart-controls">
+                <select id="chartView" onchange="updateChart()">
+                    <option value="manager-stacked">Sessions per day — by manager (stacked)</option>
+                    <option value="role-stacked">Sessions per day — by role (stacked)</option>
+                    <option value="manager-total">Total sessions by manager</option>
+                    <option value="role-total">Total sessions by role</option>
+                    <option value="day-total">Total sessions per day</option>
+                    <option value="manager-pie">Manager share (doughnut)</option>
+                    <option value="role-pie">Role share (doughnut)</option>
+                </select>
+
+                <select id="managerFilter" onchange="updateChart()">
+                    <option value="">All managers</option>
+                    {% for mgr in managers %}
+                    <option value="{{ mgr }}">{{ mgr }}</option>
+                    {% endfor %}
+                </select>
+
+                <select id="roleFilter" onchange="updateChart()">
+                    <option value="">All roles</option>
+                    {% for role in roles %}
+                    <option value="{{ role }}">{{ role }}</option>
+                    {% endfor %}
+                </select>
+
+                <button class="btn-ghost btn-small" onclick="resetFilters()">Reset</button>
+            </div>
+
+            <div class="chart-caption" id="chartCaption"></div>
+
+            <canvas id="mainChart"></canvas>
+        </section>
+
+        <section class="card actions">
+            <a href="{{ url_for('download') }}" class="btn-primary">Download Excel</a>
+            <a href="{{ url_for('export_gsheets') }}" class="btn-secondary">Save to Google Sheets</a>
+            <a href="{{ url_for('index') }}" class="btn-ghost">Create New Schedule</a>
+        </section>
+    </div>
+
+    <script>
+        const chartRows = {{ chart_rows | tojson }};
+        let chartInstance = null;
+
+        const colorPalette = [
+            '#4472C4', '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5',
+            '#70AD47', '#264478', '#9E480E', '#636363', '#997300',
+            '#255E91', '#43682B', '#698ED0', '#F1975A', '#B7B7B7'
+        ];
+
+        function updateChart() {
+            const view = document.getElementById('chartView').value;
+            const managerFilter = document.getElementById('managerFilter').value;
+            const roleFilter = document.getElementById('roleFilter').value;
+
+            // Filter rows
+            let filtered = chartRows.filter(row => {
+                if (managerFilter && row.manager !== managerFilter) return false;
+                if (roleFilter && row.role !== roleFilter) return false;
+                return true;
+            });
+
+            const caption = document.getElementById('chartCaption');
+            caption.textContent = `Showing ${filtered.length} session(s)`;
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            const ctx = document.getElementById('mainChart').getContext('2d');
+
+            if (view === 'manager-stacked') {
+                buildStackedChart(ctx, filtered, 'manager');
+            } else if (view === 'role-stacked') {
+                buildStackedChart(ctx, filtered, 'role');
+            } else if (view === 'manager-total') {
+                buildTotalChart(ctx, filtered, 'manager');
+            } else if (view === 'role-total') {
+                buildTotalChart(ctx, filtered, 'role');
+            } else if (view === 'day-total') {
+                buildDayTotalChart(ctx, filtered);
+            } else if (view === 'manager-pie') {
+                buildPieChart(ctx, filtered, 'manager');
+            } else if (view === 'role-pie') {
+                buildPieChart(ctx, filtered, 'role');
+            }
+        }
+
+        function buildStackedChart(ctx, rows, groupBy) {
+            const dates = [...new Set(rows.map(r => r.date))].sort();
+            const groups = [...new Set(rows.map(r => r[groupBy]))].sort();
+
+            const datasets = groups.map((grp, idx) => {
+                const data = dates.map(date => {
+                    return rows.filter(r => r.date === date && r[groupBy] === grp).length;
+                });
+
+                return {
+                    label: grp,
+                    data: data,
+                    backgroundColor: colorPalette[idx % colorPalette.length],
+                    stack: 'stack1'
+                };
+            });
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: dates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: `Sessions per Day — by ${groupBy}` }
+                    },
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true, beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function buildTotalChart(ctx, rows, groupBy) {
+            const groups = [...new Set(rows.map(r => r[groupBy]))].sort();
+            const counts = groups.map(grp => rows.filter(r => r[groupBy] === grp).length);
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: groups,
+                    datasets: [{
+                        label: 'Sessions',
+                        data: counts,
+                        backgroundColor: colorPalette[0]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: `Total Sessions by ${groupBy}` }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function buildDayTotalChart(ctx, rows) {
+            const dates = [...new Set(rows.map(r => r.date))].sort();
+            const counts = dates.map(date => rows.filter(r => r.date === date).length);
+
+            chartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Sessions',
+                        data: counts,
+                        backgroundColor: colorPalette[0]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: 'Total Sessions per Day' }
+                    },
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function buildPieChart(ctx, rows, groupBy) {
+            const groups = [...new Set(rows.map(r => r[groupBy]))].sort();
+            const counts = groups.map(grp => rows.filter(r => r[groupBy] === grp).length);
+
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: groups,
+                    datasets: [{
+                        data: counts,
+                        backgroundColor: colorPalette
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: `${groupBy.charAt(0).toUpperCase() + groupBy.slice(1)} Share` }
+                    }
+                }
+            });
+        }
+
+        function resetFilters() {
+            document.getElementById('managerFilter').value = '';
+            document.getElementById('roleFilter').value = '';
+            document.getElementById('chartView').value = 'manager-stacked';
+            updateChart();
+        }
+
+        // Initial render
+        updateChart();
+    </script>
+</body>
+</html>

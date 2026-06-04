@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+*.log
+*.xlsx
+*.xls
+uploads/
+instance/
+.env
+client_secret.json
+token.json

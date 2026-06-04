@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exported to Google Sheets</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>✅ Saved to Google Sheets</h1>
+            <p>Your schedule has been exported successfully</p>
+        </header>
+
+        <section class="card">
+            <h2>Success</h2>
+            <p>Your schedule is now available in Google Sheets:</p>
+            <p><a href="{{ url}}" target="_blank" class="btn-primary">Open in Google Sheets</a></p>
+
+            <hr>
+
+            <p><a href="{{ url_for('index') }}" class="btn-ghost">Create New Schedule</a></p>
+        </section>
+    </div>
+</body>
+</html>
