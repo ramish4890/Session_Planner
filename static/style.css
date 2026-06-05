@@ -298,6 +298,31 @@ summary:hover {
     max-height: 400px;
 }
 
+/* Batch mode styles */
+.batch-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    align-items: center;
+}
+
+.batch-row label {
+    min-width: 70px;
+    font-weight: 500;
+}
+
+.batch-row input[type="time"] {
+    width: 120px;
+}
+
+.batch-row input[type="number"] {
+    width: 200px;
+}
+
+.hidden {
+    display: none !important;
+}
+
 .actions {
     display: flex;
     gap: 10px;

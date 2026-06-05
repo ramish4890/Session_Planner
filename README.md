@@ -7,6 +7,12 @@ This app is intended to help plan sessions requested by stakeholders, such as en
 ## Features
 
 ### Core Scheduling
+
+**Two scheduling modes:**
+1. **Individual Mode** — One-on-one sessions with flexible time slots within scheduling windows
+2. **Batch Mode** — Group sessions at fixed times (e.g., 10:00, 14:00) with configurable batch sizes
+
+**Individual Mode Features:**
 - **Multiple scheduling windows** — Add any number of time windows, optionally bound to specific roles
 - **Multi-week scheduling** — Repeat the full session set across multiple weeks
 - **Configurable constraints**:
@@ -16,6 +22,13 @@ This app is intended to help plan sessions requested by stakeholders, such as en
   - Respect off-days and approved leaves
   - Shift-aware placement (reps scheduled within their 9-hour shift window)
   - Daily load balancing
+
+**Batch Mode Features:**
+- **Fixed-time group sessions** — Define batch times (e.g., 10:00 AM, 2:00 PM)
+- **Automatic or manual batch sizing** — Specify preferred batch size or let the engine balance automatically
+- **Role-proportional batching** — Maintains representative role distribution across batches (e.g., if roster is 60% Senior, 30% Junior, 10% Support, each batch will preserve ~60/30/10 split)
+- **Graveyard shift separation** — Automatically schedules graveyard-shift reps (18:00-03:00) on different days from day-shift reps to prevent operational gaps
+- **Batch summary reporting** — Detailed breakdown of each batch showing capacity, actual attendance, role breakdown, and participant list
 
 ### Reports & Visualization
 - **Interactive charts** (Chart.js):
@@ -90,11 +103,19 @@ This app is intended to help plan sessions requested by stakeholders, such as en
 - **Leave Tracker (optional)**: Excel file with a `Workday Data` sheet containing:
   - `Employee ID`, `Time Off Date`, `Status` (only "Approved" leaves are used)
 
-### 2. Configure Scheduling Windows
-- Add one or more time windows (e.g., 09:00 – 14:00)
-- Optionally bind roles to windows:
-  - Leave blank → applies to all reps
-  - Enter roles (comma-separated) → only those roles schedule in that window
+### 2. Choose Scheduling Mode
+
+**Individual Mode:**
+- Configure scheduling windows (e.g., 09:00 – 14:00)
+- Optionally bind roles to specific windows
+- Set session length, max per slot, gap days
+- Enable constraints (one-manager-per-slot, shift-aware, etc.)
+
+**Batch Mode:**
+- Define batch times (e.g., 10:00, 14:00)
+- Set preferred batch sizes (or leave blank for auto-balance)
+- Enable role-proportional batching to maintain role distribution
+- Enable graveyard shift separation to keep night/day shifts on different days
 
 ### 3. Set Week & Days
 - Choose the starting Monday

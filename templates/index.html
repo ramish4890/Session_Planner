@@ -35,14 +35,28 @@
             </section>
 
             <section class="card">
-                <h2>2. Scheduling Window(s)</h2>
+                <h2>2. Scheduling Mode</h2>
+                <div class="form-group">
+                    <label>
+                        <input type="radio" name="scheduling_mode" value="individual" checked onclick="toggleSchedulingMode()">
+                        Individual Sessions (one-on-one slots)
+                    </label>
+                    <label>
+                        <input type="radio" name="scheduling_mode" value="batch" onclick="toggleSchedulingMode()">
+                        Batch Sessions (group sessions at fixed times)
+                    </label>
+                </div>
+            </section>
+
+            <section class="card" id="individual-config">
+                <h2>3a. Scheduling Window(s) <span class="hint">(Individual Mode)</span></h2>
                 <p class="hint">Add time windows. Optionally bind roles to specific windows.</p>
 
                 <div id="windows-container">
                     <div class="window-row">
-                        <input type="time" name="window_1_start" value="09:00" required>
+                        <input type="time" name="window_1_start" value="09:00">
                         <span>to</span>
-                        <input type="time" name="window_1_end" value="14:00" required>
+                        <input type="time" name="window_1_end" value="14:00">
                         <input type="text" name="window_1_roles" placeholder="Roles (comma-separated, or leave blank for all)">
                     </div>
                 </div>
@@ -51,8 +65,40 @@
                 <button type="button" class="btn-ghost" onclick="addWindow()">+ Add another window</button>
             </section>
 
+            <section class="card hidden" id="batch-config">
+                <h2>3b. Batch Configuration <span class="hint">(Batch Mode)</span></h2>
+                <p class="hint">Define batch session times and preferred sizes. Leave size blank for auto-balance.</p>
+
+                <div id="batches-container">
+                    <div class="batch-row">
+                        <label>Batch 1:</label>
+                        <input type="time" name="batch_1_time" value="10:00">
+                        <input type="number" name="batch_1_size" placeholder="Size (leave blank for auto)" min="1">
+                    </div>
+                </div>
+
+                <input type="hidden" id="batch_count" name="batch_count" value="1">
+                <button type="button" class="btn-ghost" onclick="addBatch()">+ Add another batch</button>
+
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label>
+                        <input type="checkbox" name="balance_by_role" checked>
+                        Balance roles proportionally across batches
+                    </label>
+                    <p class="hint">Ensures each batch has a proportional mix of roles (e.g., if roster is 60% Team A, 30% Team B, 10% Team C, each batch will maintain ~60/30/10 split).</p>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="separate_graveyard" checked>
+                        Separate graveyard shifts (18:00-03:00) to different days
+                    </label>
+                    <p class="hint">Keeps graveyard-shift batches on Mon/Wed, day-shift batches on Tue/Thu/Fri to avoid overlap.</p>
+                </div>
+            </section>
+
             <section class="card">
-                <h2>3. Week & Days</h2>
+                <h2>4. Week & Days</h2>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="week_start">Week Start Date</label>
@@ -79,8 +125,8 @@
                 </div>
             </section>
 
-            <section class="card">
-                <h2>4. Session Settings</h2>
+            <section class="card" id="individual-session-settings">
+                <h2>5a. Session Settings <span class="hint">(Individual Mode)</span></h2>
                 <div class="form-row">
                     <div class="form-group">
                         <label for="sessions_per_rep">Sessions per Rep</label>
@@ -103,13 +149,22 @@
                 </div>
             </section>
 
+            <section class="card" id="batch-session-settings" class="hidden">
+                <h2>5b. Batch Session Settings</h2>
+                <div class="form-group">
+                    <label for="sessions_per_rep_batch">Sessions per Rep</label>
+                    <input type="number" id="sessions_per_rep_batch" name="sessions_per_rep" value="2" min="1">
+                    <p class="hint">How many batch sessions each rep will attend across the selected weeks.</p>
+                </div>
+            </section>
+
             <section class="card">
-                <h2>5. Constraints</h2>
-                <label><input type="checkbox" name="one_manager_per_slot" checked> One manager per slot</label><br>
+                <h2>6. Constraints</h2>
+                <label><input type="checkbox" id="one_manager_per_slot_check" name="one_manager_per_slot" checked> One manager per slot <span class="hint">(Individual only)</span></label><br>
                 <label><input type="checkbox" name="respect_off_day" checked> Respect Off Days</label><br>
                 <label><input type="checkbox" name="respect_leaves" checked> Respect Leaves</label><br>
-                <label><input type="checkbox" name="shift_aware" checked> Shift-aware placement</label><br>
-                <label><input type="checkbox" name="balance_days" checked> Balance daily load</label>
+                <label><input type="checkbox" id="shift_aware_check" name="shift_aware" checked> Shift-aware placement <span class="hint">(Individual only)</span></label><br>
+                <label><input type="checkbox" id="balance_days_check" name="balance_days" checked> Balance daily load <span class="hint">(Individual only)</span></label>
             </section>
 
             <button type="submit" class="btn-primary">Generate Schedule</button>
@@ -126,6 +181,7 @@
         document.getElementById('week_start').valueAsDate = nextMonday;
 
         let windowCounter = 1;
+        let batchCounter = 1;
 
         function addWindow() {
             windowCounter++;
@@ -133,18 +189,47 @@
             const newRow = document.createElement('div');
             newRow.className = 'window-row';
             newRow.innerHTML = `
-                <input type="time" name="window_${windowCounter}_start" value="09:00" required>
+                <input type="time" name="window_${windowCounter}_start" value="09:00">
                 <span>to</span>
-                <input type="time" name="window_${windowCounter}_end" value="14:00" required>
+                <input type="time" name="window_${windowCounter}_end" value="14:00">
                 <input type="text" name="window_${windowCounter}_roles" placeholder="Roles (comma-separated, or leave blank for all)">
             `;
             container.appendChild(newRow);
             document.getElementById('window_count').value = windowCounter;
         }
 
+        function addBatch() {
+            batchCounter++;
+            const container = document.getElementById('batches-container');
+            const newRow = document.createElement('div');
+            newRow.className = 'batch-row';
+            newRow.innerHTML = `
+                <label>Batch ${batchCounter}:</label>
+                <input type="time" name="batch_${batchCounter}_time" value="14:00">
+                <input type="number" name="batch_${batchCounter}_size" placeholder="Size (leave blank for auto)" min="1">
+            `;
+            container.appendChild(newRow);
+            document.getElementById('batch_count').value = batchCounter;
+        }
+
         function toggleMultiWeek() {
             const checked = document.getElementById('repeat_weeks').checked;
             document.getElementById('multi-week-section').classList.toggle('hidden', !checked);
+        }
+
+        function toggleSchedulingMode() {
+            const mode = document.querySelector('input[name="scheduling_mode"]:checked').value;
+            const isBatch = mode === 'batch';
+
+            document.getElementById('individual-config').classList.toggle('hidden', isBatch);
+            document.getElementById('batch-config').classList.toggle('hidden', !isBatch);
+            document.getElementById('individual-session-settings').classList.toggle('hidden', isBatch);
+            document.getElementById('batch-session-settings').classList.toggle('hidden', !isBatch);
+
+            // Disable individual-only constraints in batch mode
+            document.getElementById('one_manager_per_slot_check').disabled = isBatch;
+            document.getElementById('shift_aware_check').disabled = isBatch;
+            document.getElementById('balance_days_check').disabled = isBatch;
         }
     </script>
 </body>

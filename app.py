@@ -7,6 +7,7 @@ from collections import Counter
 
 from scheduler.loader import load_roster, load_leaves
 from scheduler.engine import schedule_sessions, parse_time
+from scheduler.batch_engine import schedule_batches
 from scheduler.workbook import build_workbook
 
 app = Flask(__name__)
@@ -51,38 +52,58 @@ def schedule():
 
     # Parse form parameters
     try:
+        scheduling_mode = request.form.get('scheduling_mode', 'individual')
+
         week_start_str = request.form.get('week_start', '')
         week_start = datetime.strptime(week_start_str, '%Y-%m-%d').date()
 
         num_weekdays = int(request.form.get('num_weekdays', 5))
         sessions_per_rep = int(request.form.get('sessions_per_rep', 2))
+
+        # Individual mode params
         session_minutes = int(request.form.get('session_minutes', 30))
         max_per_slot = int(request.form.get('max_per_slot', 5))
         gap_days = int(request.form.get('gap_days', 1))
-
         one_manager_per_slot = request.form.get('one_manager_per_slot') == 'on'
+        shift_aware = request.form.get('shift_aware') == 'on'
+
+        # Common params
         respect_off_day = request.form.get('respect_off_day') == 'on'
         respect_leaves = request.form.get('respect_leaves') == 'on'
-        shift_aware = request.form.get('shift_aware') == 'on'
         balance_days = request.form.get('balance_days') == 'on'
 
-        # Parse windows
+        # Batch mode params
+        balance_by_role = request.form.get('balance_by_role') == 'on'
+        separate_graveyard = request.form.get('separate_graveyard') == 'on'
+
+        # Parse windows (for individual mode) or batch configs (for batch mode)
         windows = []
-        window_count = int(request.form.get('window_count', 1))
+        batch_configs = []
 
-        for i in range(1, window_count + 1):
-            start_time = request.form.get(f'window_{i}_start', '09:00')
-            end_time = request.form.get(f'window_{i}_end', '14:00')
-            roles_str = request.form.get(f'window_{i}_roles', '').strip()
+        if scheduling_mode == 'batch':
+            # Parse batch configurations
+            batch_count = int(request.form.get('batch_count', 1))
+            for i in range(1, batch_count + 1):
+                batch_time = request.form.get(f'batch_{i}_time', '10:00')
+                batch_size_str = request.form.get(f'batch_{i}_size', '').strip()
+                batch_size = int(batch_size_str) if batch_size_str else None
+                batch_configs.append((batch_time, batch_size))
+        else:
+            # Parse scheduling windows (individual mode)
+            window_count = int(request.form.get('window_count', 1))
+            for i in range(1, window_count + 1):
+                start_time = request.form.get(f'window_{i}_start', '09:00')
+                end_time = request.form.get(f'window_{i}_end', '14:00')
+                roles_str = request.form.get(f'window_{i}_roles', '').strip()
 
-            start_h, start_m = parse_time(start_time)
-            end_h, end_m = parse_time(end_time)
+                start_h, start_m = parse_time(start_time)
+                end_h, end_m = parse_time(end_time)
 
-            roles_list = None
-            if roles_str:
-                roles_list = [r.strip() for r in roles_str.split(',') if r.strip()]
+                roles_list = None
+                if roles_str:
+                    roles_list = [r.strip() for r in roles_str.split(',') if r.strip()]
 
-            windows.append((start_h, start_m, end_h, end_m, roles_list))
+                windows.append((start_h, start_m, end_h, end_m, roles_list))
 
         # Multi-week support
         num_weeks = 1
@@ -107,17 +128,24 @@ def schedule():
 
     # Run scheduler
     try:
-        result = schedule_sessions(
-            roster, leaves, week_start, num_weekdays, windows, sessions_per_rep,
-            session_minutes, max_per_slot, gap_days, one_manager_per_slot,
-            respect_off_day, respect_leaves, shift_aware, balance_days, num_weeks
-        )
+        if scheduling_mode == 'batch':
+            result = schedule_batches(
+                roster, leaves, week_start, num_weekdays, batch_configs, sessions_per_rep,
+                respect_off_day, respect_leaves, balance_by_role, num_weeks, separate_graveyard
+            )
+        else:
+            result = schedule_sessions(
+                roster, leaves, week_start, num_weekdays, windows, sessions_per_rep,
+                session_minutes, max_per_slot, gap_days, one_manager_per_slot,
+                respect_off_day, respect_leaves, shift_aware, balance_days, num_weeks
+            )
 
         scheduled = result['scheduled']
         unscheduled = result['unscheduled']
+        batch_summary = result.get('batch_summary', [])
 
         # Build workbook
-        wb = build_workbook(scheduled, unscheduled, roster, num_weeks)
+        wb = build_workbook(scheduled, unscheduled, roster, num_weeks, batch_summary=batch_summary)
 
         # Save for download
         output_path = os.path.join(app.config['UPLOAD_FOLDER'], 'schedule_output.xlsx')
@@ -171,7 +199,9 @@ def schedule():
                              chart_rows=chart_rows,
                              managers=managers,
                              roles=roles,
-                             num_weeks=num_weeks)
+                             num_weeks=num_weeks,
+                             scheduling_mode=scheduling_mode,
+                             batch_summary=batch_summary)
 
     except Exception as e:
         flash(f'Error during scheduling: {e}', 'error')

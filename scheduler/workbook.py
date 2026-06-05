@@ -5,12 +5,12 @@ from openpyxl.utils import get_column_letter
 from collections import defaultdict, Counter
 
 
-def build_workbook(scheduled, unscheduled, roster, num_weeks):
+def build_workbook(scheduled, unscheduled, roster, num_weeks, batch_summary=None):
     """
     Create Excel workbook with:
         - Final Schedule (long format)
         - Unscheduled Reps
-        - Calendar Grid
+        - Calendar Grid (or Batch Summary if batch mode)
         - Daily Balance
         - Windows & Rules
         - Leave Adjustments
@@ -177,5 +177,41 @@ def build_workbook(scheduled, unscheduled, roster, num_weeks):
     ws_leave = wb.create_sheet("Leave Adjustments")
     ws_leave.append(["Note"])
     ws_leave.append(["Leave data applied. Unscheduled reps shown in Unscheduled Reps sheet."])
+
+    # Sheet 5: Batch Summary (if batch mode)
+    if batch_summary:
+        ws_batch = wb.create_sheet("Batch Summary")
+        batch_headers = ["Batch ID", "Week", "Date", "Day", "Time", "Group", "Capacity",
+                        "Actual", "Role Breakdown", "Reps"]
+        ws_batch.append(batch_headers)
+
+        # Style header
+        for col_idx, hdr in enumerate(batch_headers, 1):
+            cell = ws_batch.cell(1, col_idx)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="9966CC", end_color="9966CC", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        # Add batch rows
+        for batch in sorted(batch_summary, key=lambda x: (x['week'], x['date'], x['time'])):
+            role_breakdown_str = '; '.join(f"{role}: {count}" for role, count in batch['role_breakdown'].items())
+            reps_str = ', '.join(batch['reps'])
+
+            ws_batch.append([
+                batch['batch_id'],
+                batch['week'],
+                batch['date'].strftime('%Y-%m-%d'),
+                batch['date'].strftime('%A'),
+                batch['time'],
+                batch['group'],
+                batch['capacity'],
+                batch['actual_count'],
+                role_breakdown_str,
+                reps_str
+            ])
+
+        # Auto-width
+        for col_idx in range(1, len(batch_headers) + 1):
+            ws_batch.column_dimensions[get_column_letter(col_idx)].width = 15 if col_idx <= 8 else 30
 
     return wb
